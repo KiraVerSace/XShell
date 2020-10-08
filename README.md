@@ -6,7 +6,7 @@ refer from the rt-thread's finsh> and nr_micro_shell!
 ## How to use it?
 ### 1. Include the library:
 ```cpp
-#include <SimpleSerialShell.h>
+#include <X_Shell.h>
 ```
 
 ### 2. Create the object and initialize it:
