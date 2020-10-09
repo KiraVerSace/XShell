@@ -4,7 +4,8 @@
  * @Company      : V-Think Development Team
  * @Author       : KiraVerSace@yeah.net
  * @Date         : 2020-10-04 04:00:18
- * @LastEditTime : 2020-10-09 00:26:27
+ * @LastEditTime : 2020-10-10 00:31:13
+ * @Attention	 : The code is refer to https://github.com/Nrusher/nr_micro_shell
  */
 #ifndef __X_SHELL_H__
 #define __X_SHELL_H__
@@ -12,12 +13,13 @@
 #include <Arduino.h>
 
 /*------------------------- x_micro_shell_conf.h ------------------------*/
+#define X_SHELL_VERSION					("V1.0 2020-10-09 Author by KiraVerSace")
 /* The user's name. */
-#define X_SHELL_USER_NAME 				"VThink > "
+#define X_SHELL_USER_NAME 				"VThink:"
 /* Maximum user name length. */
 #define X_SHELL_USER_NAME_MAX_LENGTH 	30
-/* Open or close the ECHO */
-#define X_SHELL_ECHO_ENABLE			 	1
+/* Enable or disable the echo */
+#define X_SHELL_ECHO_ENABLE				1
 /* Maximum count of command. 最多允许的命令个数*/
 #define X_SHELL_MAX_CMD_COUNT		 	64
 /* ANSI command line buffer size. 允许的命令行最大长度 */
@@ -34,53 +36,59 @@
 #define X_SHELL_CMD_HISTORY_BUF_LENGTH	128
 /*  [0: \n]/Unix   [1: \r]/MacOS   [2: \r\n]/Windows */
 #define X_SHELL_END_OF_LINE 			1
-/* Weather the terminal support all ANSI codes. */
+/* Weather the terminal support all ANSI codes. When you use secureCRT please set to 0 */
 #define X_SHLL_FULL_ANSI 				1
 /* Show logo or not. */
 #define X_SHELL_SHOW_LOGO 				1
 
+
 /*---------- type definitions -----------*/
+typedef struct
+{
+	char commandName[X_SHELL_CMD_NAME_MAX_LENGTH];
+	void (*functionPoint)(char argc, char *argv);
+} CommandT;
+typedef struct
+{
+	uint16_t fp;
+	uint16_t rp;
+
+	uint16_t len;
+	uint16_t index;
+
+	uint16_t storeFront;
+	uint16_t storeRear;
+	uint16_t storeNum;
+
+	char queue[X_SHELL_MAX_CMD_HISTORY_NUM  + 1];
+	char buf[X_SHELL_CMD_HISTORY_BUF_LENGTH + 1];
+} ShellHistoryQueueT;
+typedef struct
+{
+	char  userName[X_SHELL_USER_NAME_MAX_LENGTH];
+	const CommandT *command;
+	ShellHistoryQueueT shellHistoryQueue;
+} ShellT;
+
 typedef void (*ShellFunctionT)(char, char *);
 
 class X_Shell
 {
 public:
-	X_Shell(HardwareSerial &serial);
+	X_Shell();
+	~X_Shell();
 
-	void init(void);
-	void run(char getCharacter);
+	void addCommand(const char *name, ShellFunctionT functionPoint);
+	void init(HardwareSerial &serial);
+	void run(void);
 private:
 	HardwareSerial *_shellSerial;
+	static uint16_t _commandCount;
+	static CommandT _staticCommand[X_SHELL_MAX_CMD_COUNT];
 
-public:
+	static void shellListCommand(char argc, char *argv);
+	static void shellParseCommand(char argc, char *argv);
 /*------------------------- x_micro_shell.h ------------------------*/
-	typedef struct
-	{
-		char commandName[X_SHELL_CMD_NAME_MAX_LENGTH];
-		void (*functionPoint)(char argc, char *argv);
-	} CommandT;
-	typedef struct
-	{
-		uint16_t fp;
-		uint16_t rp;
-
-		uint16_t len;
-		uint16_t index;
-
-		uint16_t storeFront;
-		uint16_t storeRear;
-		uint16_t storeNum;
-
-		char queue[X_SHELL_MAX_CMD_HISTORY_NUM  + 1];
-		char buf[X_SHELL_CMD_HISTORY_BUF_LENGTH + 1];
-	} ShellHistoryQueueT;
-	typedef struct
-    {
-        char  userName[X_SHELL_USER_NAME_MAX_LENGTH];
-        const CommandT *command;
-		ShellHistoryQueueT shellHistoryQueue;
-    } ShellT;
-
 	ShellT _shell;
 
 	char *shellStrtok(char *stringOrg, const char *demial);
@@ -110,10 +118,6 @@ public:
 	#if X_SHELL_END_OF_LINE == 2
 	#define X_SHELL_NEXT_LINE "\r\n"
 	#endif
-
-	CommandT _staticCommand[X_SHELL_MAX_CMD_COUNT];
-	#define x_cmd_start_add (&_staticCommand[0])
-
 /*------------------------- ansi_def.h ------------------------*/
 	#define X_ANSI_CTRL_MAX_LEN 	20
 	#define X_ANSI_MAX_EX_DATA_NUM 	1
@@ -212,11 +216,14 @@ public:
 
 /*------------------------- ansi.h ------------------------*/
 	void ansiInit(AnsiT *ansi);
-	int16_t  ansiCharSearch(char ch, const char *buf);
+	int16_t ansiCharSearch(char ch, const char *buf);
 	char ansiCharGet(char ch, AnsiT *ansi);
 	void ansiCurrentLineClear(AnsiT *ansi);
 
 	const char ANSI_IN_COMMAND[32] = {'m', 'I', 'A', 'B', 'C', 'D', 'X', 'K', 'M', 'P', 'J', '@', 'L', 'l', 'h', 'n', 'H', 's', 'u', '~','\0'};
 	const char ANSI_IN_SPECIAL_SYMBOL[8] = {'\b', '\n', '\r', '\t', '\0'};
 };
+
+extern X_Shell xShell;
+
 #endif

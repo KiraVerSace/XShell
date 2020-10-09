@@ -4,31 +4,93 @@
  * @Company      : V-Think Development Team
  * @Author       : KiraVerSace@yeah.net
  * @Date         : 2020-10-04 04:04:29
- * @LastEditTime : 2020-10-08 23:54:00
+ * @LastEditTime : 2020-10-10 00:54:15
  */
 #include "X_Shell.h"
 
-X_Shell::X_Shell(HardwareSerial &serial)
+X_Shell xShell;
+
+uint16_t X_Shell::_commandCount = 0;
+CommandT X_Shell::_staticCommand[X_SHELL_MAX_CMD_COUNT];
+
+X_Shell::X_Shell()
+{
+	strncpy(this->_shell.userName, X_SHELL_USER_NAME, sizeof(this->_shell.userName));
+
+	this->addCommand("ls", X_Shell::shellListCommand);
+	this->addCommand("parser", X_Shell::shellParseCommand);
+
+	this->_shell.command = &_staticCommand[0];
+}
+
+X_Shell::~X_Shell()
+{
+
+}
+
+void X_Shell::addCommand(const char *name, ShellFunctionT functionPoint)
+{
+	strncpy(&this->_staticCommand[X_Shell::_commandCount].commandName[0], name, sizeof(this->_staticCommand[X_Shell::_commandCount].commandName));
+	this->_staticCommand[X_Shell::_commandCount].functionPoint = functionPoint;
+
+	X_Shell::_commandCount++;
+
+	if (X_Shell::_commandCount >= X_SHELL_MAX_CMD_COUNT)
+	{
+		this->_shellSerial->print("Too many commands has been added!\r\n");
+	}
+}
+
+void X_Shell::init(HardwareSerial &serial)
 {
 	this->_shellSerial = &serial;
 
-	strncpy(this->_shell.userName, X_SHELL_USER_NAME, sizeof(this->_shell.userName));
-	this->_shell.command = x_cmd_start_add;
-}
-
-void X_Shell::init(void)
-{
 	this->ansiInit(&this->_ansi);
 	this->shellIinit(&this->_shell);
 }
 
 
-void X_Shell::run(char getCharacter)
+void X_Shell::run(void)
 {
-	if (this->ansiCharGet(getCharacter, &this->_ansi) == X_SHELL_END_CHAR)
+	if(this->_shellSerial->available())
 	{
-		this->shellParser(&_shell, _ansi.currentLine);
-		this->ansiCurrentLineClear(&_ansi);
+		if (this->ansiCharGet(Serial.read(), &this->_ansi) == X_SHELL_END_CHAR)
+		{
+			this->shellParser(&_shell, _ansi.currentLine);
+			this->ansiCurrentLineClear(&_ansi);
+		}
+	}
+}
+
+void X_Shell::shellListCommand(char argc, char *argv)
+{
+	if (!strcmp("-all", &argv[(uint8_t)argv[1]]))
+	{
+		for (uint8_t i = 0; xShell._staticCommand[i].functionPoint != NULL; i++)
+		{
+			xShell._shellSerial->printf("%s\r\n", xShell._staticCommand[i].commandName);
+		}
+	}
+	else if (!strcmp("-v", &argv[(uint8_t)argv[1]]))
+	{
+		xShell._shellSerial->printf("%s\r\n", X_SHELL_VERSION);
+	}
+	else
+	{
+		xShell._shellSerial->print("ls [options]\r\n");
+		xShell._shellSerial->print("options: \r\n");
+		xShell._shellSerial->print("\t -v \t: Show version\r\n");
+		xShell._shellSerial->print("\t -all \t: show all commands\r\n");
+	}
+}
+
+void X_Shell::shellParseCommand(char argc, char *argv)
+{
+	xShell._shellSerial->print("Parse the command...\r\n");
+
+	for (uint8_t i =0; i <argc; i++)
+	{
+		xShell._shellSerial->printf("Index: %d     Parameter:[%s] \r\n", i, &argv[(uint8_t)argv[i]]);
 	}
 }
 
@@ -91,8 +153,9 @@ void X_Shell::shellIinit(ShellT *shell)
 #endif
 	this->_shellSerial->print(shell->userName);
 	shellHistoryQueueInit(&shell->shellHistoryQueue);
-	shellHistoryQueueCommandAdd(&shell->shellHistoryQueue, (char *)"ls Command");
-	shell->shellHistoryQueue.index = 1;
+	/* Issue: 这里必须加上这句，但是我认为这不是最优的解决办法，不加会导致第一个 UP 历史命令无法显示 */
+	shellHistoryQueueCommandAdd(&shell->shellHistoryQueue, (char *)"ls");
+//	shell->shellHistoryQueue.index = 1;
 }
 
 ShellFunctionT X_Shell::shellCommandSerach(ShellT *shell, char *str)
@@ -196,11 +259,13 @@ void X_Shell::shellHistoryQueueInit(ShellHistoryQueueT *queueHistory)
 {
 	queueHistory->fp = 0;
 	queueHistory->rp = 0;
-	queueHistory->len = 0;
+
+	queueHistory->index = 0;
+	queueHistory->len   = 0;
 
 	queueHistory->storeFront = 0;
-	queueHistory->storeRear = 0;
-	queueHistory->storeNum = 0;
+	queueHistory->storeRear  = 0;
+	queueHistory->storeNum   = 0;
 }
 
 void X_Shell::shellHistoryQueueCommandAdd(ShellHistoryQueueT *queueHistory, char *str)
@@ -369,6 +434,15 @@ int16_t X_Shell::ansiCharSearch(char ch, const char *buf)
     }
 }
 
+void X_Shell::ansiCtrlCommonSlover(AnsiT *ansi)
+{
+    uint16_t i;
+    for (i = 0; i < ansi->cmdNum; i++)
+    {
+		this->_shellSerial->print(*(ansi->combineBuf + i));
+    }
+}
+
 void X_Shell::ansiCommonCharSlover(AnsiT *ansi,char ch)
 {
 	short i;
@@ -409,15 +483,6 @@ void X_Shell::ansiCommonCharSlover(AnsiT *ansi,char ch)
     }
 
 
-}
-
-void X_Shell::ansiCtrlCommonSlover(AnsiT *ansi)
-{
-    uint16_t i;
-    for (i = 0; i < ansi->cmdNum; i++)
-    {
-		this->_shellSerial->print(*(ansi->combineBuf + i));
-    }
 }
 
 // line break '\r' processing
@@ -478,7 +543,15 @@ void X_Shell::ansiUp(AnsiT *ansi)
     if (_shell.shellHistoryQueue.index > 0)
     {
 #if X_SHLL_FULL_ANSI == 1
-        this->_shellSerial->printf("\033[%dD", ansi->p + 1);
+/* 在SecureCRT中按下上下箭头键访问历史数据时，如果shell输入中没有数据，那么ansi->p的值为-1，
+此时执行    printf("\033[%dD", ansi->p + 1)；
+相当于执行  printf("\033[0D")；
+按照定义应该是光标不动，但是实际会将光标向左移动1位，所以加入判断，只有在非-1时执行。
+*/
+		if (ansi->p != -1)
+		{
+			this->_shellSerial->printf("\033[%dD", ansi->p + 1);
+		}
         this->_shellSerial->print(X_ANSI_CLEAR_RIGHT);
 #else
         this->_shellSerial->print("\r\n");
@@ -505,7 +578,15 @@ void X_Shell::ansiDown(AnsiT *ansi)
     if (_shell.shellHistoryQueue.index > 0)
     {
 #if X_SHLL_FULL_ANSI == 1
-        this->_shellSerial->printf("\033[%dD", ansi->p + 1);
+		/* 在SecureCRT中按下上下箭头键访问历史数据时，如果shell输入中没有数据，那么ansi->p的值为-1，
+		此时执行    printf("\033[%dD", ansi->p + 1)；
+		相当于执行  printf("\033[0D")；
+		按照定义应该是光标不动，但是实际会将光标向左移动1位，所以加入判断，只有在非-1时执行。
+		*/
+		if (ansi->p != -1)
+		{
+			this->_shellSerial->printf("\033[%dD", ansi->p + 1);
+		}
         this->_shellSerial->print(X_ANSI_CLEAR_RIGHT);
 #else
         this->_shellSerial->print("\r\n");
@@ -573,7 +654,15 @@ void X_Shell::ansiTab(AnsiT *ansi)
         else
         {
 #if X_SHLL_FULL_ANSI == 1
-            this->_shellSerial->printf("\033[%dD", ansi->p + 1);
+			/* 在SecureCRT中按下上下箭头键访问历史数据时，如果shell输入中没有数据，那么ansi->p的值为-1，
+			此时执行    printf("\033[%dD", ansi->p + 1)；
+			相当于执行  printf("\033[0D")；
+			按照定义应该是光标不动，但是实际会将光标向左移动1位，所以加入判断，只有在非-1时执行。
+			*/
+			if (ansi->p != -1)
+			{
+				this->_shellSerial->printf("\033[%dD", ansi->p + 1);
+			}
             this->_shellSerial->print(X_ANSI_CLEAR_RIGHT);
 #else
             this->_shellSerial->print("\r\n");
