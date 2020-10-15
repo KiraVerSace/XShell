@@ -4,7 +4,7 @@
  * @Company      : V-Think Development Team
  * @Author       : KiraVerSace@yeah.net
  * @Date         : 2020-10-04 04:00:18
- * @LastEditTime : 2020-10-10 00:31:13
+ * @LastEditTime : 2020-10-10 03:52:09
  * @Attention	 : The code is refer to https://github.com/Nrusher/nr_micro_shell
  */
 #ifndef __X_SHELL_H__
@@ -13,9 +13,9 @@
 #include <Arduino.h>
 
 /*------------------------- x_micro_shell_conf.h ------------------------*/
-#define X_SHELL_VERSION					("V1.0 2020-10-09 Author by KiraVerSace")
+#define X_SHELL_VERSION					("\r\nV1.0 2020-10-09 Author by KiraVerSace\r\n")
 /* The user's name. */
-#define X_SHELL_USER_NAME 				"VThink:"
+#define X_SHELL_USER_NAME 				"VThink > "
 /* Maximum user name length. */
 #define X_SHELL_USER_NAME_MAX_LENGTH 	30
 /* Enable or disable the echo */
